@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:17
+    container_name: dashtrack-db
+    environment:
+      POSTGRES_DB: dashtracker
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - dashtrack_pgdata:/var/lib/postgresql/data
+  
+volumes:
+  dashtrack_pgdata:
