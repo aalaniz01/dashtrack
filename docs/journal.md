@@ -122,3 +122,130 @@ choice, the reasoning, and the tradeoffs accepted. Newest at the bottom.
 - **Tradeoffs:** `pip` + `venv` is the lingua franca some interviewers assume; uv
   automates activation, so must retain understanding of the underlying venv model.
 - **Date:** 2026-07-30
+
+# DashTrack — Phase 1 close-out: Formatting & Linting
+
+Append the two sections below into your existing `docs/journal.md` and
+`docs/decision-log.md` respectively.
+
+---
+
+
+### Session — Phase 1: Formatting & Linting (final Phase 1 item)
+**Date:** 2026-08-02
+
+**Problem being solved**
+Nothing enforced code consistency across the monorepo. On a project that grows
+over many sessions, style drift turns review into whitespace arguments and hides
+real bugs (unused imports, dead variables) in noise. Needed automated linting
+(quality) and formatting (appearance) on both backend and frontend.
+
+**Key concept learned**
+Linter vs. formatter are two *different jobs*:
+- **Linter** = "code works, but this looks wrong/risky" — quality & bug patterns.
+- **Formatter** = "code is fine; just make it look uniform" — appearance only.
+In Python one tool (Ruff) wears both hats; in JS/TS the jobs are split across two
+tools (ESLint = linter, Prettier = formatter).
+
+**Backend (Ruff)**
+- Added with `uv add --dev ruff` → landed in `[dependency-groups].dev`, not
+  runtime `dependencies`, because the running production app never invokes it.
+- Verified both hats on a deliberately-messy throwaway file:
+  - `ruff check` found unused imports (F401), unused variable (F841), unsorted
+    import block (I001) — reported, changed nothing.
+  - `ruff check --fix` repaired the 3 provably-safe issues; left F841 alone
+    because it can't prove the RHS is side-effect-free (safe vs. unsafe fixes).
+  - `ruff format` rewrote pure spacing; reported "unchanged" when already tidy.
+- Committed: `chore: add ruff for backend linting and formatting`.
+
+**Frontend (ESLint + Prettier)**
+- ESLint already shipped with the `create-next-app` scaffold; ran clean out of
+  the box via `npm run lint`.
+- Installed Prettier with `npm install --save-dev --save-exact prettier`.
+  `--save-exact` pins the formatter to an exact version so different machines
+  can't format the same file differently and cause spurious diff churn.
+- Added empty `.prettierrc.json` (`{}`) as a deliberate "Prettier lives here"
+  signal for editors/reviewers, with zero overrides (no house style preference).
+- `prettier --check .` flagged 2 scaffold-generated files (AGENTS.md,
+  next.config.ts) — because create-next-app doesn't run Prettier on its
+  templates. `prettier --write .` fixed them; re-check came back clean.
+- Kept Prettier defaults; relied on its built-in ignoring of node_modules/.next/
+  gitignored paths instead of adding a `.prettierignore` (no problem to solve).
+- Installed `eslint-config-prettier` (the "peace treaty"): disables every ESLint
+  rule that overlaps with Prettier's formatting territory, so the two never
+  fight over whitespace. Wired into `eslint.config.mjs` *after* the Next configs
+  (array order = precedence; the treaty must come last to switch off rules the
+  earlier configs turned on).
+- Added `format` and `format:check` scripts to `package.json` for discoverable,
+  consistent invocation.
+- Committed: `chore: add prettier and eslint config for frontend`.
+
+**Deferred (logged, not fixed)**
+`npm install` reported 3 high-severity vulnerabilities on scaffold deps.
+Deliberately did NOT run `npm audit fix --force` (can install breaking changes).
+Deferred to pre-deploy triage; to investigate with plain `npm audit`.
+
+**Lessons learned**
+- Tooling belongs *to the project* (pinned in its recipe), not installed
+  system-wide — same reproducibility principle as `.venv` and `nvm`.
+- Commit granularity is measured in *ideas*, not files or frequency: backend
+  Ruff and frontend ESLint/Prettier were two independent ideas → two commits,
+  but the 6-file frontend change was one idea → one commit.
+- Read tool warnings; form a judgment instead of blindly obeying a `--fix`.
+
+**Phase 1 status:** COMPLETE. Frontend, backend, and database all run locally on
+a clean, reproducible, version-controlled footing.
+
+---
+
+### Decision: Ruff for backend linting + formatting (single tool, dev group)
+- **Context:** Needed Python linting and formatting for the FastAPI backend.
+- **Options considered:** flake8/pylint + black + isort (separate tools); Ruff
+  (one tool, both jobs).
+- **Chosen:** Ruff, installed via `uv add --dev` into the dev dependency group.
+- **Reason:** One fast tool replaces three; dev-group placement keeps it out of
+  the runtime dependency set the production app installs.
+- **Tradeoffs:** Ruff is newer/less battle-tested than the black+flake8 combo,
+  but it's now the mainstream default and the migration path back is trivial.
+- **Date:** 2026-08-02
+
+### Decision: ESLint + Prettier + eslint-config-prettier for frontend
+- **Context:** JS/TS ecosystem splits linting and formatting across two tools.
+- **Options considered:** ESLint alone (has some formatting rules); Prettier
+  alone (no linting); both together with a conflict-resolution config.
+- **Chosen:** ESLint (quality, from scaffold) + Prettier (formatting, pinned
+  exact) + `eslint-config-prettier` to disable overlapping ESLint style rules.
+- **Reason:** Each tool does its dedicated job; the treaty prevents the two from
+  fighting over whitespace.
+- **Tradeoffs:** Two tools + a bridge config is more moving parts than a single
+  tool, but it's the ecosystem standard and there is no single-tool equivalent
+  to Ruff on the JS side yet.
+- **Date:** 2026-08-02
+
+### Decision: Pin Prettier to an exact version (--save-exact)
+- **Context:** A formatter that differs by version can reformat the same file
+  differently across machines, producing spurious diff churn.
+- **Options considered:** default caret range (`^`); exact pin.
+- **Chosen:** exact pin via `--save-exact` for Prettier only (not for ESLint or
+  the config packages).
+- **Reason:** Formatter output must be identical everywhere; linters tolerate
+  compatible newer versions without behavior change.
+- **Tradeoffs:** Must bump Prettier manually to get updates — acceptable and
+  arguably desirable for a formatter.
+- **Date:** 2026-08-02
+
+### Decision: No .prettierignore (rely on defaults)
+- **Context:** Some files (node_modules, build output) shouldn't be formatted.
+- **Options considered:** add a `.prettierignore`; rely on Prettier's defaults.
+- **Chosen:** Rely on defaults.
+- **Reason:** Prettier already ignores node_modules/, .next/, and gitignored
+  paths automatically; the `--check` run confirmed only real, wanted files were
+  flagged. No problem to solve yet.
+- **Tradeoffs:** Will add a `.prettierignore` if/when a file needing protection
+  shows up in a check. Deferred, not rejected.
+- **Date:** 2026-08-02
+
+
+### Database first notes
+Designed user↔shift as one-to-many; decided to enforce referential integrity via a database foreign key (guarantee) plus a service-layer existence check (graceful failure). Reasoned through why DB-level enforcement is necessary: multiple clients can reach the DB directly and bypass app code.
+
